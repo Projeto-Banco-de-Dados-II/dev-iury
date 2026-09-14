@@ -1,167 +1,407 @@
 SET search_path TO academico, public;
 
--- Consulta 1 — oferta acadêmica com junções entre turma, disciplina, período, professor e sala.
-SELECT pl.ano, pl.semestre, d.codigo AS disciplina, d.nome,
-       t.codigo AS turma, t.turno, p.nome AS professor,
-       s.codigo AS sala, th.dia_semana,
-       lower(th.faixa) AS inicio, upper(th.faixa) AS fim
+SELECT
+    t.id AS turma_id,
+    d.codigo AS disciplina,
+    d.nome AS disciplina_nome,
+    pl.ano,
+    pl.semestre,
+    t.turno,
+    p.nome AS professor,
+    c.nome AS campus,
+    s.codigo AS sala,
+    th.dia_semana,
+    lower(th.faixa) AS inicio,
+    upper(th.faixa) AS fim
 FROM turma t
-JOIN disciplina d ON d.id=t.disciplina_id
-JOIN periodo_letivo pl ON pl.id=t.periodo_letivo_id
-LEFT JOIN professor p ON p.id=t.professor_id
-LEFT JOIN turma_horario th ON th.turma_id=t.id
-LEFT JOIN sala s ON s.id=th.sala_id
-ORDER BY pl.ano, pl.semestre, d.codigo, t.codigo;
+JOIN disciplina d
+    ON d.id = t.disciplina_id
+JOIN periodo_letivo pl
+    ON pl.id = t.periodo_letivo_id
+LEFT JOIN professor p
+    ON p.id = t.professor_id
+LEFT JOIN turma_horario th
+    ON th.turma_id = t.id
+LEFT JOIN sala s
+    ON s.id = th.sala_id
+LEFT JOIN campus c
+    ON c.id = s.campus_id
+ORDER BY
+    pl.ano,
+    pl.semestre,
+    d.codigo,
+    t.id;
 
--- Consulta 2 — junção externa com agregação para identificar matrículas por curso.
-SELECT c.codigo, c.nome,
-       count(m.id) FILTER (WHERE m.status='MATRICULADO') AS matriculas_ativas,
-       count(DISTINCT a.id) AS alunos_com_registro
+
+SELECT
+    c.codigo,
+    c.nome,
+    COUNT(m.id) FILTER (
+        WHERE m.status = 'MATRICULADO'
+    ) AS matriculas_ativas,
+    COUNT(DISTINCT a.id) AS alunos_com_registro
 FROM curso c
-LEFT JOIN aluno a ON a.curso_id=c.id
-LEFT JOIN matricula m ON m.aluno_id=a.id
-GROUP BY c.id,c.codigo,c.nome
-ORDER BY matriculas_ativas DESC;
+LEFT JOIN aluno a
+    ON a.curso_id = c.id
+LEFT JOIN matricula m
+    ON m.aluno_id = a.id
+GROUP BY
+    c.id,
+    c.codigo,
+    c.nome
+ORDER BY
+    matriculas_ativas DESC,
+    c.codigo;
 
--- Consulta 3 — consulta recursiva da árvore de pré-requisitos de Banco de Dados II.
+
 WITH RECURSIVE arvore AS (
-    SELECT pr.disciplina_id, pr.requisito_id, 1 AS nivel,
-           ARRAY[pr.disciplina_id,pr.requisito_id] AS caminho
+    SELECT
+        pr.disciplina_id,
+        pr.requisito_id,
+        1 AS nivel,
+        ARRAY[
+            pr.disciplina_id,
+            pr.requisito_id
+        ] AS caminho
     FROM pre_requisito pr
-    WHERE pr.disciplina_id = (SELECT id FROM disciplina WHERE codigo='CCO072')
-    UNION ALL
-    SELECT a.disciplina_id, pr.requisito_id, a.nivel+1,
-           a.caminho || pr.requisito_id
-    FROM arvore a
-    JOIN pre_requisito pr ON pr.disciplina_id=a.requisito_id
-    WHERE NOT pr.requisito_id = ANY(a.caminho)
-)
--- Consulta 4 — consulta recursiva para identificar disciplinas que o aluno pode cursar.
-SELECT a.nivel,
-       d.codigo AS disciplina,
-       r.codigo AS requisito
-FROM arvore a
-JOIN disciplina d ON d.id=a.disciplina_id
-JOIN disciplina r ON r.id=a.requisito_id
-ORDER BY a.nivel,r.codigo;
+    JOIN disciplina d
+        ON d.id = pr.disciplina_id
+    WHERE d.codigo = 'CCO072'
+      AND pr.vinculo = 'PRE_REQUISITO'
 
--- Consulta 5 — função de janela com RANK e PERCENT_RANK para classificação dos alunos.
+    UNION ALL
+
+    SELECT
+        a.disciplina_id,
+        pr.requisito_id,
+        a.nivel + 1,
+        a.caminho || pr.requisito_id
+    FROM arvore a
+    JOIN pre_requisito pr
+        ON pr.disciplina_id = a.requisito_id
+    WHERE pr.vinculo = 'PRE_REQUISITO'
+      AND NOT pr.requisito_id = ANY(a.caminho)
+)
+SELECT
+    a.nivel,
+    d.codigo AS disciplina,
+    d.nome AS disciplina_nome,
+    r.codigo AS requisito,
+    r.nome AS requisito_nome,
+    a.caminho
+FROM arvore a
+JOIN disciplina d
+    ON d.id = a.disciplina_id
+JOIN disciplina r
+    ON r.id = a.requisito_id
+ORDER BY
+    a.nivel,
+    r.codigo;
+
+
 WITH RECURSIVE
-alvo AS (SELECT 1::integer AS aluno_id),
+alvo AS (
+    SELECT 1::INTEGER AS aluno_id
+),
 passadas AS (
-    SELECT DISTINCT t.disciplina_id
+    SELECT DISTINCT
+        t.disciplina_id
     FROM matricula m
-    JOIN historico h ON h.matricula_id=m.id
-    JOIN turma t ON t.id=m.turma_id
-    WHERE m.aluno_id=(SELECT aluno_id FROM alvo)
-      AND h.situacao='APROVADO'
+    JOIN historico h
+        ON h.matricula_id = m.id
+    JOIN turma t
+        ON t.id = m.turma_id
+    WHERE m.aluno_id = (SELECT aluno_id FROM alvo)
+      AND h.situacao = 'APROVADO'
 ),
 cadeia AS (
-    SELECT cd.disciplina_id, pr.requisito_id
-    FROM curriculo_disciplina cd
-    JOIN aluno a ON a.curriculo_id=cd.curriculo_id
-    JOIN pre_requisito pr ON pr.disciplina_id=cd.disciplina_id
-    WHERE a.id=(SELECT aluno_id FROM alvo)
-    UNION ALL
-    SELECT c.disciplina_id, pr.requisito_id
+    SELECT
+        cd.disciplina_id,
+        pr.requisito_id
+    FROM aluno a
+    JOIN curriculo_disciplina cd
+        ON cd.curriculo_id = a.curriculo_id
+    JOIN pre_requisito pr
+        ON pr.disciplina_id = cd.disciplina_id
+       AND pr.vinculo = 'PRE_REQUISITO'
+    WHERE a.id = (SELECT aluno_id FROM alvo)
+
+    UNION
+
+    SELECT
+        c.disciplina_id,
+        pr.requisito_id
     FROM cadeia c
-    JOIN pre_requisito pr ON pr.disciplina_id=c.requisito_id
+    JOIN pre_requisito pr
+        ON pr.disciplina_id = c.requisito_id
+       AND pr.vinculo = 'PRE_REQUISITO'
 ),
 necessarias AS (
-    SELECT DISTINCT disciplina_id, requisito_id FROM cadeia
+    SELECT DISTINCT
+        disciplina_id,
+        requisito_id
+    FROM cadeia
 )
--- Consulta 6 — função de janela LAG para evolução do rendimento por período.
-SELECT d.codigo,d.nome,cd.periodo,cd.tipo
+SELECT
+    d.codigo,
+    d.nome,
+    cd.periodo,
+    cd.tipo
 FROM aluno a
-JOIN curriculo_disciplina cd ON cd.curriculo_id=a.curriculo_id
-JOIN disciplina d ON d.id=cd.disciplina_id
-WHERE a.id=(SELECT aluno_id FROM alvo)
-  AND d.id NOT IN (SELECT disciplina_id FROM passadas)
+JOIN curriculo_disciplina cd
+    ON cd.curriculo_id = a.curriculo_id
+JOIN disciplina d
+    ON d.id = cd.disciplina_id
+WHERE a.id = (SELECT aluno_id FROM alvo)
+  AND d.id NOT IN (
+      SELECT disciplina_id
+      FROM passadas
+  )
   AND NOT EXISTS (
       SELECT 1
       FROM necessarias n
-      WHERE n.disciplina_id=d.id
-        AND n.requisito_id NOT IN (SELECT disciplina_id FROM passadas)
+      WHERE n.disciplina_id = d.id
+        AND n.requisito_id NOT IN (
+            SELECT disciplina_id
+            FROM passadas
+        )
   )
-ORDER BY cd.periodo,d.codigo;
+ORDER BY
+    cd.periodo,
+    d.codigo;
 
--- Consulta 7 — ocupação e percentual de vagas das turmas.
-SELECT c.codigo AS curso, a.nome AS aluno,
-       round(avg(h.media_final),2) AS media,
-       rank() OVER (
-         PARTITION BY c.id ORDER BY avg(h.media_final) DESC
-       ) AS ranking,
-       round(percent_rank() OVER (
-         PARTITION BY c.id ORDER BY avg(h.media_final)
-       )::numeric,4) AS percentil
+
+SELECT
+    a.id AS aluno_id,
+    a.nome,
+    pl.ano,
+    pl.semestre,
+    ROUND(AVG(h.media_final), 2) AS media_periodo,
+    COUNT(h.id) AS disciplinas_avaliadas
 FROM aluno a
-JOIN curso c ON c.id=a.curso_id
-JOIN matricula m ON m.aluno_id=a.id
-JOIN historico h ON h.matricula_id=m.id
-WHERE h.media_final IS NOT NULL
-GROUP BY c.id,c.codigo,a.id,a.nome
-ORDER BY c.codigo,ranking;
+JOIN matricula m
+    ON m.aluno_id = a.id
+JOIN historico h
+    ON h.matricula_id = m.id
+JOIN turma t
+    ON t.id = m.turma_id
+JOIN periodo_letivo pl
+    ON pl.id = t.periodo_letivo_id
+GROUP BY
+    a.id,
+    a.nome,
+    pl.ano,
+    pl.semestre
+ORDER BY
+    a.id,
+    pl.ano,
+    pl.semestre;
 
--- Consulta 8 — alunos sem qualquer matrícula.
-WITH notas AS (
-    SELECT a.id AS aluno_id,a.nome,pl.ano,pl.semestre,
-           round(avg(h.media_final),2) AS media
+
+WITH medias AS (
+    SELECT
+        a.id AS aluno_id,
+        a.nome,
+        ROUND(AVG(h.media_final), 2) AS media_final
     FROM aluno a
-    JOIN matricula m ON m.aluno_id=a.id
-    JOIN turma t ON t.id=m.turma_id
-    JOIN periodo_letivo pl ON pl.id=t.periodo_letivo_id
-    JOIN historico h ON h.matricula_id=m.id
+    JOIN matricula m
+        ON m.aluno_id = a.id
+    JOIN historico h
+        ON h.matricula_id = m.id
     WHERE h.media_final IS NOT NULL
-    GROUP BY a.id,a.nome,pl.ano,pl.semestre
+    GROUP BY
+        a.id,
+        a.nome
 )
--- Consulta 9 — carga de turmas e matrículas por professor.
-SELECT aluno_id,nome,ano,semestre,media,
-       lag(media) OVER (
-         PARTITION BY aluno_id ORDER BY ano,semestre
-       ) AS media_anterior,
-       round((media-lag(media) OVER (
-         PARTITION BY aluno_id ORDER BY ano,semestre
-       ))::numeric,2) AS variacao
-FROM notas
-ORDER BY aluno_id,ano,semestre;
+SELECT
+    aluno_id,
+    nome,
+    media_final,
+    RANK() OVER (
+        ORDER BY media_final DESC
+    ) AS ranking,
+    ROUND(
+        PERCENT_RANK() OVER (
+            ORDER BY media_final DESC
+        )::NUMERIC,
+        4
+    ) AS percentil
+FROM medias
+ORDER BY
+    ranking,
+    aluno_id;
 
--- Consulta 10 — desempenho médio e taxa de aprovação por disciplina.
-SELECT t.codigo,d.codigo AS disciplina,t.vagas,
-       count(m.id) FILTER (WHERE m.status='MATRICULADO') AS ocupadas,
-       round(
-         100.0*count(m.id) FILTER (WHERE m.status='MATRICULADO')/t.vagas,2
-       ) AS ocupacao_pct
+
+WITH rendimento AS (
+    SELECT
+        a.id AS aluno_id,
+        a.nome,
+        pl.ano,
+        pl.semestre,
+        ROUND(AVG(h.media_final), 2) AS media_periodo
+    FROM aluno a
+    JOIN matricula m
+        ON m.aluno_id = a.id
+    JOIN historico h
+        ON h.matricula_id = m.id
+    JOIN turma t
+        ON t.id = m.turma_id
+    JOIN periodo_letivo pl
+        ON pl.id = t.periodo_letivo_id
+    GROUP BY
+        a.id,
+        a.nome,
+        pl.ano,
+        pl.semestre
+),
+com_anterior AS (
+    SELECT
+        aluno_id,
+        nome,
+        ano,
+        semestre,
+        media_periodo,
+        LAG(media_periodo) OVER (
+            PARTITION BY aluno_id
+            ORDER BY ano, semestre
+        ) AS media_periodo_anterior
+    FROM rendimento
+)
+SELECT
+    aluno_id,
+    nome,
+    ano,
+    semestre,
+    media_periodo,
+    media_periodo_anterior,
+    ROUND(
+        media_periodo - media_periodo_anterior,
+        2
+    ) AS variacao_media
+FROM com_anterior
+ORDER BY
+    aluno_id,
+    ano,
+    semestre;
+
+
+SELECT
+    t.id AS turma_id,
+    d.codigo AS disciplina,
+    t.vagas,
+    COUNT(m.id) FILTER (
+        WHERE m.status = 'MATRICULADO'
+    ) AS matriculas_ativas,
+    t.vagas -
+        COUNT(m.id) FILTER (
+            WHERE m.status = 'MATRICULADO'
+        ) AS vagas_disponiveis,
+    ROUND(
+        (
+            COUNT(m.id) FILTER (
+                WHERE m.status = 'MATRICULADO'
+            )::NUMERIC
+            / NULLIF(t.vagas, 0)
+        ) * 100,
+        2
+    ) AS percentual_ocupacao
 FROM turma t
-JOIN disciplina d ON d.id=t.disciplina_id
-LEFT JOIN matricula m ON m.turma_id=t.id
-GROUP BY t.id,t.codigo,d.codigo,t.vagas
-ORDER BY ocupacao_pct DESC;
+JOIN disciplina d
+    ON d.id = t.disciplina_id
+LEFT JOIN matricula m
+    ON m.turma_id = t.id
+GROUP BY
+    t.id,
+    d.codigo,
+    t.vagas
+ORDER BY
+    percentual_ocupacao DESC,
+    t.id;
 
-SELECT a.id,a.matricula,a.nome
+
+SELECT
+    a.id,
+    a.nome,
+    a.matricula
 FROM aluno a
-LEFT JOIN matricula m ON m.aluno_id=a.id
+LEFT JOIN matricula m
+    ON m.aluno_id = a.id
 WHERE m.id IS NULL
-ORDER BY a.id;
+ORDER BY
+    a.nome;
 
-SELECT p.nome,p.titulacao,
-       count(DISTINCT t.id) AS turmas,
-       count(m.id) FILTER (WHERE m.status='MATRICULADO') AS matriculas
-FROM professor p
-LEFT JOIN turma t ON t.professor_id=p.id
-LEFT JOIN matricula m ON m.turma_id=t.id
-GROUP BY p.id,p.nome,p.titulacao
-ORDER BY matriculas DESC;
 
-SELECT d.codigo,d.nome,
-       count(h.id) AS registros,
-       round(avg(h.media_final),2) AS media,
-       round(avg(h.frequencia),2) AS frequencia_media,
-       round(100.0*count(*) FILTER (WHERE h.situacao='APROVADO')
-             / NULLIF(count(*) FILTER (WHERE h.situacao<>'CURSANDO'),0),2)
-             AS taxa_aprovacao
+SELECT
+    d.codigo,
+    d.nome,
+    COUNT(DISTINCT m.aluno_id) AS alunos_avaliados,
+    ROUND(AVG(h.media_final), 2) AS media_disciplina,
+    COUNT(*) FILTER (
+        WHERE h.situacao = 'APROVADO'
+    ) AS aprovados,
+    COUNT(*) FILTER (
+        WHERE h.situacao IN (
+            'REPROVADO_NOTA',
+            'REPROVADO_FALTA'
+        )
+    ) AS reprovados,
+    ROUND(
+        (
+            COUNT(*) FILTER (
+                WHERE h.situacao = 'APROVADO'
+            )::NUMERIC
+            /
+            NULLIF(
+                COUNT(*) FILTER (
+                    WHERE h.situacao <> 'CURSANDO'
+                ),
+                0
+            )
+        ) * 100,
+        2
+    ) AS taxa_aprovacao
 FROM disciplina d
-JOIN turma t ON t.disciplina_id=d.id
-JOIN matricula m ON m.turma_id=t.id
-JOIN historico h ON h.matricula_id=m.id
-GROUP BY d.id,d.codigo,d.nome
-ORDER BY taxa_aprovacao DESC NULLS LAST;
+LEFT JOIN turma t
+    ON t.disciplina_id = d.id
+LEFT JOIN matricula m
+    ON m.turma_id = t.id
+LEFT JOIN historico h
+    ON h.matricula_id = m.id
+GROUP BY
+    d.id,
+    d.codigo,
+    d.nome
+ORDER BY
+    taxa_aprovacao DESC NULLS LAST,
+    d.codigo;
+
+
+SELECT *
+FROM vw_oferta
+ORDER BY
+    ano,
+    semestre,
+    disciplina;
+
+
+SELECT *
+FROM vw_vagas
+ORDER BY
+    turma_id;
+
+
+SELECT *
+FROM vw_historico
+ORDER BY
+    ra,
+    ano,
+    semestre,
+    disciplina;
+
+
+SELECT *
+FROM mv_indicadores_curso
+ORDER BY
+    curso,
+    ano,
+    semestre;
