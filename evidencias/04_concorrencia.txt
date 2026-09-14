@@ -1,0 +1,9 @@
+RESULTADOS REAIS DA DEMONSTRACAO DE CONCORRENCIA
+
+Cenario inseguro:
+
+Cenario FOR UPDATE:
+
+Cenario SERIALIZABLE:
+
+Estado final da turma:

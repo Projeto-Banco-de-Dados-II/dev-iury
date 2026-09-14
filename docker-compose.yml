@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: bd2_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: matricula
+      POSTGRES_USER: bd2
+      POSTGRES_PASSWORD: bd2
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bd2 -d matricula"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: bd2_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@iesb.br
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "8080:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:

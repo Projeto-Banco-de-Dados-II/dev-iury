@@ -1,0 +1,7 @@
+RESULTADOS REAIS DOS TESTES DE RLS
+
+Aluno 1:
+
+Aluno 2:
+
+Confirmacao de isolamento entre historicos:
