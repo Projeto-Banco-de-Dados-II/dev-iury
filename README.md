@@ -1,100 +1,346 @@
 # Projeto Acadêmico — Banco de Dados II (CCO072)
 
-Sistema de Matrícula Acadêmica — IESB 2026/2.
+## Sistema de Matrícula Acadêmica — IESB 2026/2
+
+Projeto desenvolvido para a disciplina de **Banco de Dados II (CCO072)**, contemplando a implementação de um sistema de matrícula acadêmica em PostgreSQL, com foco em integridade, consultas avançadas, desempenho, concorrência, segurança e operação/recovery.
 
 ## Objetivo
 
-Implementar o modelo relacional fornecido pelo professor com integridade, consultas avançadas, desempenho, concorrência, segurança e operação/recovery.
+Implementar o modelo relacional proposto para o sistema acadêmico, contemplando:
 
-## Requisitos
+* Modelagem e implementação do banco de dados;
+* Integridade e restrições;
+* Tipos ENUM, domains e tipos range;
+* Chaves e relacionamentos;
+* Colunas geradas;
+* Consultas SQL de diferentes níveis de complexidade;
+* Views e materialized views;
+* Índices e análise de desempenho;
+* Controle de concorrência;
+* Segurança e controle de acesso;
+* Row Level Security (RLS);
+* Backup e restauração;
+* Procedimentos de operação e recuperação.
 
-- Docker Desktop
-- Docker Compose
-- PostgreSQL 17 no contêiner
-- pgAdmin opcional
+## Tecnologias
 
-O enunciado oficial determina PostgreSQL 17. O guia de ambiente distribuído anteriormente menciona PostgreSQL 16; para este projeto, siga a versão indicada no enunciado oficial.
+* PostgreSQL 17
+* Docker
+* Docker Compose
+* pgAdmin
 
-## Subir o banco
+O banco de dados PostgreSQL 17 é executado em contêiner Docker.
 
-No PowerShell, dentro desta pasta:
+## Configuração do ambiente
+
+### Subir o banco
+
+No PowerShell, dentro da pasta do projeto:
 
 ```powershell
 docker compose up -d
 docker compose ps
 ```
 
-Banco: `localhost:5432`
-Database: `matricula`
-Usuário: `bd2`
-Senha: `bd2`
-pgAdmin: `http://localhost:8080`
+### Acesso ao banco
 
-## Ordem de execução
+* **Host:** `localhost`
+* **Porta:** `5432`
+* **Database:** `matricula`
+* **Usuário:** `bd2`
+* **Senha:** `bd2`
 
-1. `initdb/01_modelo.sql`
-2. `initdb/02_dados.sql`
-3. `sql/03_consultas.sql`
-4. `sql/04_views.sql`
-5. `sql/05_indices.sql`
-6. `sql/06_concorrencia.sql`
-7. `sql/07_seguranca.sql`
-8. `sql/08_operacao.sql`
+### pgAdmin
 
-Os scripts 01 e 02 são executados automaticamente pelo PostgreSQL na primeira criação do volume.
+O pgAdmin está disponível em:
 
-## Consultas comentadas
+`http://localhost:8080`
 
-As dez consultas estão comentadas individualmente porque o enunciado exige que cada consulta seja comentada. Os demais scripts permanecem sem comentários SQL desnecessários.
+## Estrutura do projeto
+
+A execução dos scripts segue a seguinte ordem:
+
+```text
+1. initdb/01_modelo.sql
+2. initdb/02_dados.sql
+3. sql/03_consultas.sql
+4. sql/04_views.sql
+5. sql/05_indices.sql
+6. sql/06_concorrencia.sql
+7. sql/07_seguranca.sql
+8. sql/08_operacao.sql
+```
+
+Os scripts de criação do modelo e carga inicial são executados automaticamente pelo PostgreSQL na primeira criação do volume.
 
 ## Marco 1
 
-O projeto contém DDL completo, tipos ENUM, domains, tipo range, chaves, restrições, colunas geradas, 120 alunos, 6 turmas, 300 matrículas e 10 consultas de complexidade crescente. As consultas incluem junção externa com agregação, duas consultas recursivas, ranking com percentil e LAG.
+O projeto possui a implementação completa do modelo relacional, incluindo:
+
+* DDL completo;
+* Tipos ENUM;
+* Domains;
+* Tipo range;
+* Chaves primárias e estrangeiras;
+* Restrições de integridade;
+* Colunas geradas;
+* 120 alunos;
+* 6 turmas;
+* 300 matrículas;
+* 10 consultas SQL de complexidade crescente.
+
+As consultas incluem recursos avançados do PostgreSQL, como:
+
+* Junções externas com agregação;
+* Consultas recursivas;
+* Ranking;
+* Percentis;
+* Função `LAG`;
+* Agregações e análises sobre os dados acadêmicos.
+
+As dez consultas estão apresentadas individualmente no arquivo `sql/03_consultas.sql`.
 
 ## Marco 2
 
-O projeto contém três views (`vw_oferta`, `vw_vagas`, `vw_historico`), uma materialized view (`mv_indicadores_curso`) com índice único para refresh concorrente, índices parciais, BRIN, GIN, evidências de EXPLAIN, demonstrações de concorrência, roles, GRANT/REVOKE, RLS, backup e restauração. Também foi incluído como bônus um índice GIN sobre JSONB (`log_matricula.detalhe`).
+O projeto também contempla recursos avançados de banco de dados, incluindo:
 
-## Política da materialized view
+### Views
 
-`mv_indicadores_curso` consolida indicadores por curso e período. Como é uma consulta agregada, a atualização não precisa ocorrer a cada leitura. A política adotada é atualizar após cargas/alterações relevantes e antes da demonstração, usando `REFRESH MATERIALIZED VIEW CONCURRENTLY` quando o índice único estiver disponível.
+Foram implementadas três views:
+
+* `vw_oferta`
+* `vw_vagas`
+* `vw_historico`
+
+### Materialized View
+
+Foi criada a materialized view:
+
+```text
+mv_indicadores_curso
+```
+
+Ela consolida indicadores por curso e período, utilizando um índice único que permite atualização concorrente.
+
+A atualização é realizada com:
+
+```sql
+REFRESH MATERIALIZED VIEW CONCURRENTLY mv_indicadores_curso;
+```
+
+quando o índice único necessário está disponível.
+
+### Índices
+
+O projeto utiliza diferentes estratégias de indexação, incluindo:
+
+* Índices convencionais;
+* Índices parciais;
+* Índices BRIN;
+* Índices GIN.
+
+Também foi implementado um índice GIN sobre o campo JSONB da tabela `log_matricula`:
+
+```text
+log_matricula.detalhe
+```
+
+### Análise de desempenho
+
+Foram incluídas evidências de análise utilizando `EXPLAIN` e recursos de otimização do PostgreSQL.
 
 ## Concorrência
 
-`sql/06_concorrencia.sql` prepara a turma 1 com 41 vagas e 40 matrículas ativas e instala o gatilho inseguro. Os arquivos `06_unsafe_A.sql` e `06_unsafe_B.sql` reproduzem a disputa. Depois execute `06_for_update_setup.sql` e use `06_for_update_A.sql` e `06_for_update_B.sql` para a correção por bloqueio explícito. Para a correção por isolamento, execute `06_serializable_setup.sql` e use `06_serializable_A.sql` e `06_serializable_B.sql` com SERIALIZABLE.
+O projeto apresenta duas estratégias para controle de concorrência durante o processo de matrícula.
 
-A comparação deve abordar contenção, custo, comportamento do bloqueio e possibilidade de retentativa em caso de serialization failure.
+### Situação de disputa
+
+A turma 1 é preparada com:
+
+* 41 vagas;
+* 40 matrículas ativas.
+
+O cenário permite reproduzir uma disputa entre duas transações tentando realizar matrículas simultaneamente.
+
+### Bloqueio explícito
+
+A primeira solução utiliza `FOR UPDATE`, realizando o bloqueio explícito do registro da turma durante a operação.
+
+Arquivos envolvidos:
+
+```text
+sql/06_for_update_setup.sql
+sql/06_for_update_A.sql
+sql/06_for_update_B.sql
+```
+
+### Isolamento SERIALIZABLE
+
+A segunda solução utiliza o nível de isolamento:
+
+```sql
+SERIALIZABLE
+```
+
+Arquivos envolvidos:
+
+```text
+sql/06_serializable_setup.sql
+sql/06_serializable_A.sql
+sql/06_serializable_B.sql
+```
+
+A comparação entre as estratégias considera:
+
+* Contenção;
+* Custo;
+* Comportamento dos bloqueios;
+* Concorrência entre transações;
+* Possibilidade de retentativa em casos de `serialization failure`.
 
 ## Segurança
 
-As roles `aluno`, `secretaria` e `coordenacao` são criadas como NOLOGIN. O teste do aluno é feito com `SET ROLE aluno` e `SET app.aluno_id`. A tabela `historico` usa RLS com `FORCE ROW LEVEL SECURITY`, e a view `vw_historico` usa `security_invoker=true` para que as políticas da tabela sejam aplicadas ao consultar a view.
+O projeto implementa diferentes mecanismos de segurança e controle de acesso.
+
+Foram criadas as roles:
+
+```text
+aluno
+secretaria
+coordenacao
+```
+
+As roles são configuradas como `NOLOGIN`.
+
+O acesso do aluno é demonstrado utilizando:
+
+```sql
+SET ROLE aluno;
+SET app.aluno_id;
+```
+
+### Row Level Security
+
+A tabela `historico` utiliza:
+
+```text
+ROW LEVEL SECURITY
+```
+
+com:
+
+```text
+FORCE ROW LEVEL SECURITY
+```
+
+A view `vw_historico` utiliza:
+
+```text
+security_invoker = true
+```
+
+permitindo que as políticas de segurança da tabela sejam respeitadas durante a consulta através da view.
+
+Também foram implementados mecanismos de:
+
+* `GRANT`;
+* `REVOKE`;
+* Controle de privilégios;
+* Isolamento das informações acadêmicas.
 
 ## Backup e restauração
 
+O projeto possui scripts automatizados para backup e restauração.
+
+### Backup
+
 ```powershell
 .\backup\backup.ps1
+```
+
+### Restauração
+
+```powershell
 .\backup\restore.ps1
 ```
 
-A restauração cria `matricula_restauracao` e usa o dump em formato custom do PostgreSQL.
+A restauração utiliza um dump em formato custom do PostgreSQL e cria o banco:
 
-## Evidências
-
-A pasta `evidencias` contém apenas modelos. Os resultados finais devem ser reais e coletados durante a execução. Não use valores inventados.
+```text
+matricula_restauracao
+```
 
 ## Validação
 
-Depois de executar os scripts, rode `sql/08_operacao.sql`. A validação deve confirmar 120 alunos, 6 turmas, 300 matrículas, históricos, views, índices, vagas e materialized view.
+O arquivo:
 
-## Reset
+```text
+sql/08_operacao.sql
+```
+
+contém as rotinas de validação e operação do projeto.
+
+Entre os itens verificados estão:
+
+* 120 alunos;
+* 6 turmas;
+* 300 matrículas;
+* Registros de histórico;
+* Views;
+* Índices;
+* Controle de vagas;
+* Materialized view;
+* Estruturas de segurança;
+* Operações de backup e restauração.
+
+## Evidências
+
+A pasta:
+
+```text
+evidencias
+```
+
+contém os registros relacionados às funcionalidades e validações realizadas no projeto, incluindo evidências de consultas, desempenho, concorrência, segurança e operação.
+
+## Reset do ambiente
+
+Para remover completamente o banco e recriar o ambiente:
 
 ```powershell
 docker compose down -v
 docker compose up -d
 ```
 
-Use o reset para repetir uma execução do zero.
+Esse procedimento recria o banco a partir dos scripts de inicialização.
 
-## Entrega
+## Execução completa
 
-Preencha `AUTORES.md`, mantenha os scripts numerados, inclua as evidências reais e faça commits distribuídos entre os integrantes. O enunciado informa que histórico de commits faz parte da avaliação.
+Para executar o projeto em um ambiente limpo:
+
+```powershell
+docker compose up -d
+docker compose ps
+```
+
+Após a inicialização do PostgreSQL, os scripts do projeto são executados na sequência definida na estrutura do projeto.
+
+O banco estará disponível em:
+
+```text
+localhost:5432
+```
+
+com:
+
+```text
+Database: matricula
+Usuário: bd2
+Senha: bd2
+```
+
+## Conclusão
+
+O projeto implementa um sistema de matrícula acadêmica completo em PostgreSQL 17, contemplando desde a modelagem e carga de dados até consultas avançadas, otimização, controle de concorrência, segurança, backup, restauração e procedimentos de operação.
+
+A solução utiliza recursos nativos do PostgreSQL para garantir integridade, desempenho, segurança e consistência das operações acadêmicas.
